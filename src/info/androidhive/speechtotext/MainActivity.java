@@ -88,9 +88,10 @@ public class MainActivity extends Activity {
 		
 		String s1 = soundex.encode("Shalom");
 		String s2 = soundex.encode("shlom");
+		String s3 = soundex.encode(convertHebToEn("שלום"));
 		
 		s1 = soundex.encode("sireen");
-		s2 = soundex.encode("סירין");
+		s2 = soundex.encode(convertHebToEn("סירין"));
 		
 		s1 = soundex.encode("joseph");
 		s2 = soundex.encode("yosef");
@@ -261,7 +262,10 @@ public class MainActivity extends Activity {
 							for (String w : words) 
 							{
 								try{
-									if (soundex.difference(w,name) >=3)
+									String w1 = convertToEnglish(w);
+									String name1 = convertToEnglish(name);
+									
+									if (soundex.difference(w1,name1) >=3)
 									{
 										matches.add(c);
 										resultList.add(c.mDisplayName);
@@ -463,22 +467,22 @@ public class MainActivity extends Activity {
 		hebrewDictionary.put('ך',"kh");
 		hebrewDictionary.put('ף',"f");
 		hebrewDictionary.put('ן',"n,en");
+		hebrewDictionary.put('ם',"m");
 	}
 	
 	
 	String convertToEnglish(String text)
 	{
-		String engText="";
+		String engText= text;
 		
 		String hebAlphabet = "אבגדהוזחטיכלמןסעפצקרשתץךףן";
-		String arabicAlphabet = "حخهعغفقثصضكمنتالبيسشزوةىﻻرؤءئ ح خ ه ع غ ف ق ث ص ض ك م ن ت ا ل ب ي س ش ز و ة ى ﻻ ر ؤ ء ئ";
-		
-				
+	//	String arabicAlphabet = "حخهعغفقثصضكمنتالبيسشزوةىﻻرؤءئ ح خ ه ع غ ف ق ث ص ض ك م ن ت ا ل ب ي س ش ز و ة ى ﻻ ر ؤ ء ئ";
+						
 		char c = text.charAt(0);
 					
 		if (hebAlphabet.indexOf(c)!= -1) // hebrew text
 		{
-						
+			engText =convertHebToEn(text);			
 		}
 		
 		return engText;
@@ -496,9 +500,65 @@ public class MainActivity extends Activity {
 		{
 			char c = hebText.charAt(i);
 			
+			String []vals = hebrewDictionary.get(c).split(",");
+			
+			if (specialChars.indexOf(c) != -1)
+			{
+				
+				if (i==0 || "בחלם".indexOf(hebText.charAt(i-1))==-1)
+				{
+					s+= vals[0];
+				}
+				else
+				{
+					s+= vals[1];
+				}			
+			}
+			else if (vouwels.indexOf(c) !=-1)
+			{
+				if (c == 'ה')
+				{
+					if (i == hebText.length()-1)
+						s+= vals[1];
+					else
+						s+=vals[0];
+				}
+				
+				if (c == 'י')
+				{
+					if (i ==0 || (i<hebText.length()-1 && hebText.charAt(i+1)== c))
+						s+= vals[1];
+					else				
+						s+=vals[0];
+				}	
+				
+				if (c == 'ו')
+				{
+					if (i ==0 || (i<hebText.length()-1 && hebText.charAt(i+1)== c))
+						s+= vals[1];
+					else			
+						s+=vals[0];
+				}	
+				
+			}
+			else if(c == 'ל')
+			{
+				if (i ==0)
+				{
+					s+=vals[0];
+				}
+				else
+				{
+					s+=vals[1];
+				}				
+			}
+			else
+			{
+				s+=vals[0];
+			}
 		}
 		
-		return "";
+		return s;
 	}
 	
 	String convertArabicToEn(char c)
