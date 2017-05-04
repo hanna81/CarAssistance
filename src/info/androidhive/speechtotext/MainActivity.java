@@ -82,6 +82,26 @@ public class MainActivity extends Activity {
 			
 		geoCoder = new Geocoder(this,Locale.getDefault());
 		
+		
+		t1=new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
+	         @Override
+	         public void onInit(int status) {
+	            if(status == TextToSpeech.SUCCESS) {	            	
+	               int res = t1.setLanguage(Locale.US);             
+	               if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED)
+	               {
+	            	   res = t1.setLanguage(Locale.UK);	            	
+	               }
+	               else
+	               {
+	            	   t1.setSpeechRate(1.0f);
+	            	   t1.speak("Ready", TextToSpeech.QUEUE_FLUSH, null);	            	   
+	               }
+	               
+	            }
+	         }
+	      });
+		
 		soundex = new Soundex();
 		
 		initHebrewMap();
@@ -412,8 +432,10 @@ public class MainActivity extends Activity {
 		             //   Toast.makeText(this, "Name: " + name 
 		             //           + ", Phone No: " + phoneNo, Toast.LENGTH_SHORT).show();
 		                
-		            }
-		            pCur.close();
+		            }	       
+		            
+		            pCur.close();		            
+		            contactList.add(c);		            
 		        }
 		    }
 		    
@@ -613,35 +635,16 @@ public class MainActivity extends Activity {
 	
 	@Override
 	protected void onResume() {
-		// TODO Auto-generated method stub	
-		t1=new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
-	         @Override
-	         public void onInit(int status) {
-	            if(status == TextToSpeech.SUCCESS) {	            	
-	               int res = t1.setLanguage(Locale.US);             
-	               if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED)
-	               {
-	            	   res = t1.setLanguage(Locale.UK);	            	
-	               }
-	               else
-	               {
-	            	   t1.setSpeechRate(1.0f);
-	            	   t1.speak("Ready", TextToSpeech.QUEUE_FLUSH, null);	            	   
-	               }
-	               
-	            }
-	         }
-	      });
-		
+		// TODO Auto-generated method stub		
 		super.onResume();
 	}
 	
-	public void onPause(){
+	public void onDestroy(){
 	      if(t1 !=null){
 	         t1.stop();
 	         t1.shutdown();
 	      }
-	      super.onPause();
+	      super.onDestroy();
 	   }
 	
 	
