@@ -191,7 +191,7 @@ public class MainActivity extends Activity {
 	 * Showing google speech input dialog
 	 * */
 	private void promptSpeechInput() {
-		Intent intent = new Intent(RecognizerIntent.ACTION_VOICE_SEARCH_HANDS_FREE); // ACTION_RECOGNIZE_SPEECH
+		Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH); //  ACTION_VOICE_SEARCH_HANDS_FREE
 		intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
 				RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
 		intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US);
@@ -220,16 +220,16 @@ public class MainActivity extends Activity {
 				ArrayList<String> result = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
 				txtSpeechInput.setText(result.get(0));
 				
-				ArrayList<String> confidence = data.getStringArrayListExtra(RecognizerIntent.EXTRA_CONFIDENCE_SCORES);
+			//	ArrayList<String> confidence = data.getStringArrayListExtra(RecognizerIntent.EXTRA_CONFIDENCE_SCORES);
 				
-				Toast.makeText(this, result.toString()+"\n"+confidence.toString(), Toast.LENGTH_LONG).show();
+				Toast.makeText(this, result.toString(), Toast.LENGTH_LONG).show();
 				
 				String text =result.get(0);
 				
 				
 				switch (curr_state) {
 				case NONE:
-					if (result.contains("call") || result.contains("calling") || result.contains("חייג") || result.contains("חיוג"))
+					if (result.contains("call") || result.contains("calling") || result.contains("חייג") || result.contains("התקשר"))
 					{
 						curr_state = ACTION_STATE.CALL_GET_NAME_DIGITS;
 						t1.speak("Please say contact name or number digit by digit", TextToSpeech.QUEUE_FLUSH, null);
