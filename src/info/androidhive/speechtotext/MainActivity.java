@@ -158,10 +158,10 @@ public class MainActivity extends Activity {
 	 * Showing google speech input dialog
 	 * */
 	private void promptSpeechInput() {
-		Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+		Intent intent = new Intent(RecognizerIntent.ACTION_VOICE_SEARCH_HANDS_FREE); // ACTION_RECOGNIZE_SPEECH
 		intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
 				RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-		intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
+		intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US);
 		intent.putExtra(RecognizerIntent.EXTRA_PROMPT,
 				getString(R.string.speech_prompt));
 		try {
@@ -184,19 +184,19 @@ public class MainActivity extends Activity {
 		case REQ_CODE_SPEECH_INPUT: {
 			if (resultCode == RESULT_OK && null != data) {
 
-				ArrayList<String> result = data
-						.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+				ArrayList<String> result = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
 				txtSpeechInput.setText(result.get(0));
 				
+				ArrayList<String> confidence = data.getStringArrayListExtra(RecognizerIntent.EXTRA_CONFIDENCE_SCORES);
 				
-				Toast.makeText(this, result.toString(), Toast.LENGTH_LONG).show();
+				Toast.makeText(this, result.toString()+"\n"+confidence.toString(), Toast.LENGTH_LONG).show();
 				
-				String cmd =result.get(0);
+				String text =result.get(0);
 				
 				
 				switch (curr_state) {
 				case NONE:
-					if (result.contains("call") || result.contains("חייג"))
+					if (result.contains("call") || result.contains("חייג") || result.contains("חיוג"))
 					{
 						curr_state = ACTION_STATE.CALL_GET_NAME_DIGITS;
 						t1.speak("Please say contact name or number digit by digit", TextToSpeech.QUEUE_FLUSH, null);
@@ -219,7 +219,7 @@ public class MainActivity extends Activity {
 						// find name in contacts and call	
 						
 						matches = new ArrayList<>();
-						String name = result.toString().replaceAll("[,.:;<>|{}=-_\"`!+-*&^%$#@~()]", "");
+						String name = result.get(0);
 							
 						resultList.clear();
 						
@@ -257,7 +257,7 @@ public class MainActivity extends Activity {
 				}
 				case CALL_CONFIRM_CONTACT:
 				{
-					if (result.get(0).equalsIgnoreCase("yes"))
+					if (result.contains("yes"))
 					{
 						t1.speak("Calling "+ callContact.mDisplayName, TextToSpeech.QUEUE_FLUSH, null);
 						// call to number
@@ -315,7 +315,7 @@ public class MainActivity extends Activity {
 				
 				case NAVIGATE_CONFIRM:
 				{
-					if (result.get(0).equalsIgnoreCase("yes"))
+					if (result.contains("yes"))
 					{
 						t1.speak("Starting Navigation",TextToSpeech.QUEUE_FLUSH, null);					
 					}
@@ -442,8 +442,18 @@ public class MainActivity extends Activity {
 		t1=new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
 	         @Override
 	         public void onInit(int status) {
-	            if(status != TextToSpeech.ERROR) {
-	               t1.setLanguage(Locale.UK);
+	            if(status == TextToSpeech.SUCCESS) {	            	
+	               int res = t1.setLanguage(Locale.US);             
+	               if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED)
+	               {
+	            	   res = t1.setLanguage(Locale.UK);	            	
+	               }
+	               else
+	               {
+	            	   t1.setSpeechRate(1.0f);
+	            	   t1.speak("Ready", TextToSpeech.QUEUE_FLUSH, null);	            	   
+	               }
+	               
 	            }
 	         }
 	      });
