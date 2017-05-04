@@ -2,8 +2,12 @@ package info.androidhive.speechtotext;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+
+import org.apache.commons.codec.EncoderException;
+import org.apache.commons.codec.language.Soundex;
 
 import android.R.color;
 import android.app.Activity;
@@ -52,6 +56,8 @@ public class MainActivity extends Activity {
 	
 	Geocoder geoCoder;
 	
+	Soundex soundex;
+	
 	ArrayList<String> resultList;
 	
 	ACTION_STATE curr_state= ACTION_STATE.NONE;
@@ -75,6 +81,32 @@ public class MainActivity extends Activity {
 		resultList = new ArrayList<>();
 			
 		geoCoder = new Geocoder(this,Locale.getDefault());
+		
+		soundex = new Soundex();
+		
+		initHebrewMap();
+		
+		String s1 = soundex.encode("Shalom");
+		String s2 = soundex.encode("shlom");
+		
+		s1 = soundex.encode("sireen");
+		s2 = soundex.encode("סירין");
+		
+		s1 = soundex.encode("joseph");
+		s2 = soundex.encode("yosef");
+		
+		int diff =0;
+		
+		try {
+			diff = soundex.difference("Shalom","salam");
+			diff = soundex.difference("ٍsireen","sreen");
+			diff = soundex.difference("ٍsireen","sheren");
+			diff = soundex.difference("joseph", "josef");
+			diff = soundex.difference("abu alshamshoum", "abu lshamshum");
+		} catch (EncoderException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		
 		// hide the action bar
 		getActionBar().hide();
@@ -196,13 +228,13 @@ public class MainActivity extends Activity {
 				
 				switch (curr_state) {
 				case NONE:
-					if (result.contains("call") || result.contains("חייג") || result.contains("חיוג"))
+					if (result.contains("call") || result.contains("calling") || result.contains("חייג") || result.contains("חיוג"))
 					{
 						curr_state = ACTION_STATE.CALL_GET_NAME_DIGITS;
 						t1.speak("Please say contact name or number digit by digit", TextToSpeech.QUEUE_FLUSH, null);
 					}
 					
-					if (result.contains("navigate") || result.contains("ניווט"))
+					if (result.contains("navigate") || result.contains("ניווט") || result.contains("נווט"))
 					{
 						curr_state = ACTION_STATE.NAVIGATE_GET_PLACE;
 						t1.speak("Please say where", TextToSpeech.QUEUE_FLUSH, null);
@@ -225,9 +257,18 @@ public class MainActivity extends Activity {
 						
 						for (Contact c:contactList)
 						{
-							if (c.mDisplayName.toLowerCase().contains(name)){
-								matches.add(c);
-								resultList.add(c.mDisplayName);
+							String[] words = c.mDisplayName.split(" ");
+							for (String w : words) 
+							{
+								try{
+									if (soundex.difference(w,name) >=3)
+									{
+										matches.add(c);
+										resultList.add(c.mDisplayName);
+									}	
+								}catch(Exception ex){
+									
+								}
 							}
 						}
 						
@@ -331,8 +372,7 @@ public class MainActivity extends Activity {
 				
 				default:
 					break;
-				}
-						
+				}					
 		}
 			break;
 		}
@@ -340,9 +380,7 @@ public class MainActivity extends Activity {
 		}
 	}
 	
-	
-	
-	
+
 	void getAllContacts()
 	{
 		
@@ -392,6 +430,83 @@ public class MainActivity extends Activity {
 		
 		return addressList; 
 	}
+	
+	
+	HashMap<Character, String> hebrewDictionary = new HashMap<>();
+	
+	void initHebrewMap()
+	{
+		
+		hebrewDictionary.put('א',"A");
+		hebrewDictionary.put('ב',"be,v");
+		hebrewDictionary.put('ג', "g");
+		hebrewDictionary.put('ד', "d");
+		hebrewDictionary.put('ה', "h,ah");
+		hebrewDictionary.put('ו',"o,v");
+		hebrewDictionary.put('ז',"z");
+		hebrewDictionary.put('ח',"kh");
+		hebrewDictionary.put('ט',"t");
+		hebrewDictionary.put('י',"i,y");
+		hebrewDictionary.put('כ',"k,kh");
+		hebrewDictionary.put('ל',"le,l");
+		hebrewDictionary.put('מ',"m");
+		hebrewDictionary.put('ן',"n");
+		hebrewDictionary.put('ס',"s");
+		hebrewDictionary.put('ע', "a");
+		hebrewDictionary.put('פ', "p,f");
+		hebrewDictionary.put('צ',"tsa");
+		hebrewDictionary.put('ק',"k");
+		hebrewDictionary.put('ר',"r");
+		hebrewDictionary.put('ש',"sh");
+		hebrewDictionary.put('ת',"t");
+		hebrewDictionary.put('ץ',"ts");
+		hebrewDictionary.put('ך',"kh");
+		hebrewDictionary.put('ף',"f");
+		hebrewDictionary.put('ן',"n,en");
+	}
+	
+	
+	String convertToEnglish(String text)
+	{
+		String engText="";
+		
+		String hebAlphabet = "אבגדהוזחטיכלמןסעפצקרשתץךףן";
+		String arabicAlphabet = "حخهعغفقثصضكمنتالبيسشزوةىﻻرؤءئ ح خ ه ع غ ف ق ث ص ض ك م ن ت ا ل ب ي س ش ز و ة ى ﻻ ر ؤ ء ئ";
+		
+				
+		char c = text.charAt(0);
+					
+		if (hebAlphabet.indexOf(c)!= -1) // hebrew text
+		{
+						
+		}
+		
+		return engText;
+	}
+	
+	
+	String convertHebToEn(String hebText)
+	{
+		String specialChars = "בכפ";
+		String vouwels = "הויא";
+		
+		String s ="";
+			
+		for (int i=0;i<hebText.length();i++)
+		{
+			char c = hebText.charAt(i);
+			
+		}
+		
+		return "";
+	}
+	
+	String convertArabicToEn(char c)
+	{
+	
+		return "";
+	}
+	
 	
 	
 	void showResults(ArrayList<String> results)
