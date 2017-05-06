@@ -5,16 +5,24 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Queue;
+import java.util.Stack;
 
 import org.apache.commons.codec.EncoderException;
 import org.apache.commons.codec.language.Soundex;
 
 import android.R.color;
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.res.Configuration;
+import android.content.res.Resources;
 import android.database.Cursor;
+import android.graphics.Color;
 import android.location.Address;
 import android.location.Geocoder;
 import android.media.AudioManager;
@@ -24,9 +32,11 @@ import android.os.Bundle;
 import android.provider.ContactsContract;
 import android.speech.RecognizerIntent;
 import android.speech.tts.TextToSpeech;
+import android.view.Gravity;
 import android.view.Menu;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewGroup.LayoutParams;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
 import android.widget.BaseAdapter;
@@ -44,12 +54,16 @@ public class MainActivity extends Activity {
 	TextView listHeaderView;
 	ListView matchesListv;
 	
-	public TextToSpeech t1;
+	TextToSpeech t1;
+	
+    List<String> supportedLanguages;
+    String languagePreference;
 	
 	ArrayList<Contact> contactList;
 	
 	ArrayList<Contact> matches;
 	Contact  callContact;
+	String callNumber;
 	
 	List<Address> addressList;
 	Address navigateAddress;
@@ -60,8 +74,11 @@ public class MainActivity extends Activity {
 	
 	ArrayList<String> resultList;
 	
+	String language = "en";
+	
 	ACTION_STATE curr_state= ACTION_STATE.NONE;
 
+	@SuppressLint("NewApi")
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -75,12 +92,18 @@ public class MainActivity extends Activity {
 		listHeaderView = new TextView(this);
 		listHeaderView.setTextSize(30);
 		listHeaderView.setTextColor(color.black);
+		listHeaderView.setGravity(Gravity.CENTER);
+		listHeaderView.setText("Choose From List");
 		
 		matchesListv.addHeaderView(listHeaderView);
-		
+
 		resultList = new ArrayList<>();
-			
-		geoCoder = new Geocoder(this,Locale.getDefault());
+		
+		Locale locale = new Locale(language);
+		geoCoder = new Geocoder(this,locale);
+		
+		Intent detailsIntent =  new Intent(RecognizerIntent.ACTION_GET_LANGUAGE_DETAILS);
+		sendOrderedBroadcast( detailsIntent, null, new LanguageDetailsChecker(), null, Activity.RESULT_OK, null, null);
 		
 		
 		t1=new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
@@ -95,7 +118,11 @@ public class MainActivity extends Activity {
 	               else
 	               {
 	            	   t1.setSpeechRate(1.0f);
-	            	   t1.speak("Ready", TextToSpeech.QUEUE_FLUSH, null);	            	   
+	            	   String msg= "welcome to car assistance -- -- available commands are: "+
+	            	   "call --"+" !! navigate -- or -- play music";
+	            	   t1.speak(msg, TextToSpeech.QUEUE_FLUSH, null);	
+	            	   txtSpeechInput.setText("Welcome to Car Assistance\nAvailable commands are: "+
+	            	   "call, navigate and play music, you can say back any where to return to main menu");
 	               }
 	               
 	            }
@@ -129,6 +156,10 @@ public class MainActivity extends Activity {
 			e.printStackTrace();
 		}
 		
+		StateMenu main = new StateMenu();
+		main.mState = ACTION_STATE.NONE;
+		menuStack.push(main);
+		
 		// hide the action bar
 		getActionBar().hide();
 		
@@ -137,9 +168,14 @@ public class MainActivity extends Activity {
 		btnSpeak.setOnClickListener(new View.OnClickListener() {
 
 			@Override
-			public void onClick(View v) {
-				promptSpeechInput();
-				playBeep();
+			public void onClick(View v) {								
+					
+				if (curr_state == ACTION_STATE.CALL_GET_NAME_DIGITS)
+					promptSpeechInput(RECOGINTION_TYPE.CONTACT);
+				else if (curr_state == ACTION_STATE.NAVIGATE_GET_PLACE)
+					promptSpeechInput(RECOGINTION_TYPE.ADDRESS);
+				else
+					promptSpeechInput(RECOGINTION_TYPE.COMMAND);
 			}
 		});
 
@@ -148,17 +184,26 @@ public class MainActivity extends Activity {
 			@Override
 			public View getView(int position, View convertView, ViewGroup parent) {
 				// TODO Auto-generated method stub
-				
+						
 				if (convertView == null)
 				{
 					TextView tv = new TextView(MainActivity.this);
-					tv.setTextSize(20);
-					tv.setTextColor(color.black);
+					tv.setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+					tv.setTextSize(24);
+					tv.setBackgroundColor(Color.BLUE);
+					tv.setTextColor(Color.BLACK);
+					tv.setGravity(Gravity.LEFT);
+					String s = resultList.get(position);
+					tv.setText(s);
 					convertView = tv;
 				}
-				
-				TextView tv = (TextView)convertView;
-				tv.setText(getItem(position).toString());
+				else
+				{
+					TextView tv = (TextView)convertView;
+					String s = resultList.get(position);
+					tv.setText(s);
+					
+				}
 										
 				return convertView;
 			}
@@ -189,11 +234,11 @@ public class MainActivity extends Activity {
 				// TODO Auto-generated method stub
 				
 				if (curr_state == ACTION_STATE.CALL_CHOOSE_CONTACT)
-				{
-					callContact = matches.get(position);
-					Intent callIntent = new Intent(Intent.ACTION_CALL);
-					callIntent.putExtra(Intent.EXTRA_PHONE_NUMBER, callContact.numbers.get(0));
-					startActivity(callIntent);
+				{			
+					callContact = matches.get(position-1);
+					t1.speak("Calling "+ callContact.mDisplayName, TextToSpeech.QUEUE_FLUSH, null);
+					Intent intent = new Intent(Intent.ACTION_CALL, Uri.parse("tel:" + callContact.numbers.get(0)));			
+					startActivity(intent);					
 				}
 				
 				if (curr_state == ACTION_STATE.NAVIGATE_CHOOSE_PLACE)
@@ -202,21 +247,41 @@ public class MainActivity extends Activity {
 					String uri = String.format("waze://?ll=%f,%f&navigate=yes",navigateAddress.getLatitude(),navigateAddress.getLongitude());
 					startActivity(new Intent(android.content.Intent.ACTION_VIEW, Uri.parse(uri)));
 				}
+				
+				curr_state = ACTION_STATE.NONE;
+				resultList.clear();
+				matchesListv.invalidateViews();
 			}
 			
 		});	
 	}
 
+	enum  RECOGINTION_TYPE {
+		COMMAND,CONTACT,ADDRESS,MUSIC
+	}
+	
 	/**
 	 * Showing google speech input dialog
 	 * */
-	private void promptSpeechInput() {
+	private void promptSpeechInput(RECOGINTION_TYPE type) {
 		Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH); //  ACTION_VOICE_SEARCH_HANDS_FREE
-		intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-				RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-		intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US);
-		intent.putExtra(RecognizerIntent.EXTRA_PROMPT,
-				getString(R.string.speech_prompt));
+		intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+	//	intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US);
+	//	intent.putExtra(RecognizerIntent.EXTRA_PROMPT,getString(R.string.speech_prompt));
+		
+		if (type == RECOGINTION_TYPE.COMMAND)
+		{
+		//String myLanguage = "en"; //or, Locale.Italian.toString()
+		intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, language);
+		intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, language); 
+		intent.putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, language);
+		}
+		else
+		{
+			intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
+			intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, Locale.getDefault()); 
+		}
+		
 		try {
 			startActivityForResult(intent, REQ_CODE_SPEECH_INPUT);
 		} catch (ActivityNotFoundException a) {
@@ -238,34 +303,54 @@ public class MainActivity extends Activity {
 			if (resultCode == RESULT_OK && null != data) {
 
 				ArrayList<String> result = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
-				txtSpeechInput.setText(result.get(0));
+				//txtSpeechInput.setText(result.get(0));
 				
 			//	ArrayList<String> confidence = data.getStringArrayListExtra(RecognizerIntent.EXTRA_CONFIDENCE_SCORES);
 				
 				Toast.makeText(this, result.toString(), Toast.LENGTH_LONG).show();
 				
 				String text =result.get(0);
-				
-				
+							
 				switch (curr_state) {
 				case NONE:
-					if (result.contains("call") || result.contains("calling") || result.contains("חייג") || result.contains("התקשר"))
+					
+					text = convertToEnglish(text);
+					
+					int diff = 0;
+					try {					 
+						 diff = soundex.difference("call",text);
+					} catch (EncoderException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+					
+					if (diff >=3 || result.contains("חייג") || result.contains("התקשר"))
 					{
 						curr_state = ACTION_STATE.CALL_GET_NAME_DIGITS;
 						t1.speak("Please say contact name or number digit by digit", TextToSpeech.QUEUE_FLUSH, null);
+						txtSpeechInput.setText("Please say contact name or number digit by digit");
+						break;
 					}
 					
 					if (result.contains("navigate") || result.contains("ניווט") || result.contains("נווט"))
 					{
 						curr_state = ACTION_STATE.NAVIGATE_GET_PLACE;
-						t1.speak("Please say where", TextToSpeech.QUEUE_FLUSH, null);
+						t1.speak("Please say destination", TextToSpeech.QUEUE_FLUSH, null);
+						txtSpeechInput.setText("Please say destination");
+						break;
 					}
+					
+					t1.speak("Sorry can't understand you",TextToSpeech.QUEUE_FLUSH, null);
+					
 					break;
 				case  CALL_GET_NAME_DIGITS:
 				{
-					if (result.get(0).matches("[+-0123456789]")) // digits only
+					if (result.get(0).replaceAll(" ", "").matches("[0-9]+")) // digits only
 					{
-						t1.speak("Please confirm calling number: "+result.get(0)+ " by saying yes or no "+matches.get(0).mDisplayName, TextToSpeech.QUEUE_FLUSH, null);
+						callNumber = result.get(0).replaceAll(" ", "");
+						t1.speak("Do you want to call number: -- "+callNumber+ " -- please say -- yes or -- no", TextToSpeech.QUEUE_FLUSH, null);
+						txtSpeechInput.setText("Do you want to call number: "+callNumber+" please say yes or no");
+						curr_state = ACTION_STATE.CALL_CONFIRM_CONTACT;
 					}					
 					else	
 					{
@@ -273,50 +358,86 @@ public class MainActivity extends Activity {
 						
 						matches = new ArrayList<>();
 						String name = result.get(0);
+						
+						String name_en = convertToEnglish(name);
 							
 						resultList.clear();
 						
 						for (Contact c:contactList)
 						{
-							String[] words = c.mDisplayName.split(" ");
-							for (String w : words) 
+							//try find the whole name
+							
+							String cname= c.mDisplayName.replaceAll("\\p{Punct}", "");
+							
+							if (cname.equalsIgnoreCase(name))
 							{
-								try{
-									String w1 = convertToEnglish(w);
-									String name1 = convertToEnglish(name);
-									
-									if (soundex.difference(w1,name1) >=3)
-									{
-										matches.add(c);
-										resultList.add(c.mDisplayName);
-									}	
-								}catch(Exception ex){
-									
+								matches.add(c);
+								resultList.add(c.mDisplayName);
+								continue;
+							}
+												
+							
+							String s1 = convertToEnglish(cname);
+							
+							try{
+								if (soundex.difference(name_en, s1)>3)
+								{
+									matches.add(c);
+									resultList.add(c.mDisplayName);
+									continue;
+								}	
+							}catch (Exception e) {
+								// TODO: handle exception
+							}
+							
+							// if name is only one word
+							if (name.split(" ").length ==1)
+							{					
+								String[] words = cname.split(" ");
+								for (String w : words) 
+								{
+									try{
+										String w1 = convertToEnglish(w);
+										String name1 = convertToEnglish(name);
+										
+										if (soundex.difference(w1,name1) >3)
+										{
+											matches.add(c);
+											resultList.add(c.mDisplayName);
+										}	
+									}catch(Exception ex){
+										
+									}
 								}
 							}
 						}
 						
-						if (matches.size() ==1) // one match found
-						{
-							callContact = matches.get(0);
-							t1.speak("Please confirm calling "+ callContact.mDisplayName+ " by saying yes or no "+matches.get(0).mDisplayName, TextToSpeech.QUEUE_FLUSH, null);
-							curr_state = ACTION_STATE.CALL_CONFIRM_CONTACT;
-						}
-						
-						if (matches.size()>1)
-						{
-							t1.speak(""+ matches.size() + " matches found /s Please choose from list:", TextToSpeech.QUEUE_FLUSH, null);
-							curr_state = ACTION_STATE.CALL_CHOOSE_CONTACT;
-													
-						}	
 						
 						if (matches.size() ==0)
 						{
 							t1.speak("No contact matches found!", TextToSpeech.QUEUE_FLUSH, null);
 							curr_state = ACTION_STATE.NONE;
+							break;
 						}
 						
-						showResults(resultList);
+						showResults();
+																			
+						if (matches.size() ==1) // one match found
+						{
+							callContact = matches.get(0);
+							String contact = convertToEnglish(callContact.mDisplayName);
+							t1.speak("Do you want to call "+ contact + " -- Please say -- yes or -- no", TextToSpeech.QUEUE_FLUSH, null);
+							txtSpeechInput.setText("Do you want to call "+ contact +" Please say Yes or No");
+							curr_state = ACTION_STATE.CALL_CONFIRM_CONTACT;
+						}
+						
+						if (matches.size()>1)
+						{
+							t1.speak(matches.size() + " matches found -- Please choose from list", TextToSpeech.QUEUE_FLUSH, null);
+							txtSpeechInput.setText(matches.size() + " matches found -- Please choose from list");
+							curr_state = ACTION_STATE.CALL_CHOOSE_CONTACT;												
+						}				
+						
 					}
 					break;
 				}
@@ -324,16 +445,34 @@ public class MainActivity extends Activity {
 				{
 					if (result.contains("yes"))
 					{
-						t1.speak("Calling "+ callContact.mDisplayName, TextToSpeech.QUEUE_FLUSH, null);
+						String number ="";
+						if (callContact !=null)
+						{
+							number = callContact.numbers.get(0);
+							t1.speak("Calling "+ callContact.mDisplayName, TextToSpeech.QUEUE_FLUSH, null);
+							txtSpeechInput.setText("Calling "+ callContact.mDisplayName);
+						} 
+						else if (callNumber != null)
+						{
+							number = callNumber;
+							t1.speak("Calling number",TextToSpeech.QUEUE_FLUSH, null);
+							txtSpeechInput.setText("Calling number");
+						}							
+						
 						// call to number
-						Intent callIntent = new Intent(Intent.ACTION_CALL);
-						callIntent.putExtra(Intent.EXTRA_PHONE_NUMBER, callContact.numbers.get(0));
-						startActivity(callIntent);					
+						Intent intent = new Intent(Intent.ACTION_CALL, Uri.parse("tel:" + number));
+						startActivity(intent);					
 					}
 					else
 					{
 						t1.speak("call aborted", TextToSpeech.QUEUE_FLUSH, null);
 					}
+					
+					callContact = null;
+					callNumber = null;
+					
+					resultList.clear();
+					txtSpeechInput.setText("");
 					
 					curr_state = ACTION_STATE.NONE;
 					
@@ -341,37 +480,38 @@ public class MainActivity extends Activity {
 				}
 				case NAVIGATE_GET_PLACE:
 				{
-					String dist = result.toString().replaceAll(",", "");
+					String dist = result.get(0);
 					//search for place in google places
 					searchForPlace(dist);
 					
 					resultList.clear();
-					
-					if (addressList !=null && addressList.size()>0)
-					{					
-						for (Address a :addressList)
-							resultList.add(a.getAddressLine(0)+", "+a.getLocality());
-												
-					}
-								
-					showResults(resultList);
+				
 					
 					if (addressList == null || addressList.isEmpty())
 					{
-						t1.speak("No location matches found!", TextToSpeech.QUEUE_FLUSH, null);
+						t1.speak("No locations found!", TextToSpeech.QUEUE_FLUSH, null);
 						curr_state = ACTION_STATE.NONE;
+						break;
+					}
+												
+					for (Address a :addressList)
+					{
+						resultList.add(a.getAddressLine(0)+", "+a.getLocality());													
 					}
 					
+					showResults();
+				
 					if (addressList.size() == 1)
 					{
 						navigateAddress = addressList.get(0);
-						t1.speak("Please confirm navigating to  "+ navigateAddress.getAddressLine(0)+ " by saying yes or no "+matches.get(0).mDisplayName, TextToSpeech.QUEUE_FLUSH, null);
+						String location = convertToEnglish(navigateAddress.getAddressLine(0)+","+ navigateAddress.getLocality());
+						t1.speak("Please confirm navigating to  "+location+" -- by saying -- yes or -- no ",TextToSpeech.QUEUE_FLUSH, null);					
 						curr_state = ACTION_STATE.NAVIGATE_CONFIRM;
 					}
 					
 					if (addressList.size()>1)
-					{
-						t1.speak(""+ matches.size() + " results found /s Please choose from list:", TextToSpeech.QUEUE_FLUSH, null);
+					{											
+						t1.speak(""+ matches.size() + " results found -- Please choose location from list:", TextToSpeech.QUEUE_FLUSH, null);
 						curr_state = ACTION_STATE.NAVIGATE_CHOOSE_PLACE;
 					}
 									
@@ -380,15 +520,27 @@ public class MainActivity extends Activity {
 				
 				case NAVIGATE_CONFIRM:
 				{
-					if (result.contains("yes"))
-					{
-						t1.speak("Starting Navigation",TextToSpeech.QUEUE_FLUSH, null);					
-					}
-					else
-					{
-						t1.speak("navigation aborted", TextToSpeech.QUEUE_FLUSH, null);
+					try{
+						if (soundex.difference(text,"yes") >3)
+						{
+							t1.speak("Starting Navigation",TextToSpeech.QUEUE_FLUSH, null);
+							
+							String uri = String.format("waze://?ll=%f,%f&navigate=yes",navigateAddress.getLatitude(),navigateAddress.getLongitude());
+							startActivity(new Intent(android.content.Intent.ACTION_VIEW, Uri.parse(uri)));
+						}
+						else
+						{
+							t1.speak("navigation aborted", TextToSpeech.QUEUE_FLUSH, null);
+							
+						}
+					}catch(Exception ex){
+						ex.printStackTrace();
 					}
 					
+					resultList.clear();
+					txtSpeechInput.setText("");
+					
+					navigateAddress =null;
 					curr_state = ACTION_STATE.NONE;
 					
 					break;
@@ -464,7 +616,7 @@ public class MainActivity extends Activity {
 	{
 		
 		hebrewDictionary.put('א',"A");
-		hebrewDictionary.put('ב',"be,v");
+		hebrewDictionary.put('ב',"b,v");
 		hebrewDictionary.put('ג', "g");
 		hebrewDictionary.put('ד', "d");
 		hebrewDictionary.put('ה', "h,ah");
@@ -522,12 +674,18 @@ public class MainActivity extends Activity {
 		{
 			char c = hebText.charAt(i);
 			
+			if (!hebrewDictionary.containsKey(c))
+			{
+				s+=c;
+				continue;
+			}
+				
 			String []vals = hebrewDictionary.get(c).split(",");
 			
 			if (specialChars.indexOf(c) != -1)
 			{
 				
-				if (i==0 || "בחלם".indexOf(hebText.charAt(i-1))==-1)
+				if (i==0 || ("בחלם".indexOf(hebText.charAt(i-1))==-1 && vouwels.indexOf(hebText.charAt(i-1))==-1))
 				{
 					s+= vals[0];
 				}
@@ -562,6 +720,11 @@ public class MainActivity extends Activity {
 						s+=vals[0];
 				}	
 				
+				if (c == 'א')
+				{
+					s+=vals[0];
+				}
+				
 			}
 			else if(c == 'ל')
 			{
@@ -591,20 +754,19 @@ public class MainActivity extends Activity {
 	
 	
 	
-	void showResults(ArrayList<String> results)
+	void showResults()
 	{
 		
-		resultList = results;
 		matchesListv.invalidateViews();
-		
+			
 		if (curr_state == ACTION_STATE.CALL_CHOOSE_CONTACT)
 		{			
-			listHeaderView.setText("Choose Contact");
+			listHeaderView.setText("Choose Contact From List");
 		}
 		
 		if (curr_state == ACTION_STATE.NAVIGATE_CHOOSE_PLACE)
 		{
-			listHeaderView.setText("Choose Destination");
+			listHeaderView.setText("Choose Destination From List");
 		}
 		
 	}
@@ -668,5 +830,44 @@ public class MainActivity extends Activity {
 		
 	}
 	
+	
+	
+	Stack<StateMenu>  menuStack = new Stack<>();
+	
+	class StateMenu 
+	{
+		ACTION_STATE  mState;
+		String mTTsPrompt;
+		String mTextMessage;
+			
+		ArrayList<String> resultList;
+		ArrayList<Object> dataList;		
+				
+	}
+	
+	
+	
+	public class LanguageDetailsChecker extends BroadcastReceiver
+	{
+	
+	    @Override
+	    public void onReceive(Context context, Intent intent)
+	    {
+	        Bundle results = getResultExtras(true);
+	        if (results.containsKey(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE))
+	        {
+	            languagePreference =
+	                    results.getString(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE);
+	        }
+	        if (results.containsKey(RecognizerIntent.EXTRA_SUPPORTED_LANGUAGES))
+	        {
+	            supportedLanguages =
+	                    results.getStringArrayList(
+	                            RecognizerIntent.EXTRA_SUPPORTED_LANGUAGES);
+	            
+	          //  t1.speak("supported languages are "+ supportedLanguages.toString(), TextToSpeech.QUEUE_ADD, null);
+	        }
+	    }
+	}
 	
 }
